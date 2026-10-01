@@ -1958,7 +1958,7 @@ function viewSettings() {
       <label class="field"><span>Modelo (déjalo en blanco si no sabes cuál)</span><input class="inp" id="gem-model" autocomplete="off" placeholder="gemini-flash-latest" value="${esc(g.model || '')}"></label>
       <div class="row"><button class="btn primary" data-act="gem-save">Guardar clave</button>${g.key ? '<button class="btn" data-act="gem-test">Probar</button><button class="btn ghost" data-act="gem-del">Quitar</button>' : ''}</div>
       <p class="tiny muted" style="margin:8px 0 0">${g.key ? 'Análisis activado.' : 'Sin clave, todo lo demás funciona igual; solo falta la corrección automática.'} Con la clave gratuita, Google puede usar lo que le envías para mejorar sus servicios: solo se envían fotogramas sueltos, nunca el vídeo entero.</p></div>`;
-    h += `<div class="card"><h3>Copia de seguridad</h3><p class="small muted">Los datos se guardan solo en este móvil. Si borras los datos de Chrome o cambias de teléfono, se pierden: descarga una copia de vez en cuando.</p>
+    h += `<div class="card"><h3>Copia de seguridad</h3><p class="small muted">Los datos se guardan solo en este móvil. ${window.DiscosAndroid ? 'Si desinstalas la app o cambias de teléfono' : 'Si borras los datos de Chrome o cambias de teléfono'}, se pierden: descarga una copia de vez en cuando.</p>
       <div class="row"><button class="btn" data-act="backup">Descargar copia</button><label class="btn">Restaurar copia<input class="vh" type="file" accept=".json,application/json" data-restore="1"></label></div></div>`;
     if (S.installEvt) h += `<div class="card"><h3>Instalar en el móvil</h3><p class="small muted">Añade Discos a tu pantalla de inicio para abrirla como una app, también sin conexión.</p><button class="btn primary" data-act="install">Instalar Discos</button></div>`;
   }
@@ -2204,6 +2204,11 @@ const ACT = {
   },
   backup: () => {
     const data = {app: 'discos', v: 1, exportedAt: new Date().toISOString(), data: {app: S.app, sessions: S.sessions}};
+    if (window.DiscosAndroid && window.DiscosAndroid.saveText) {
+      const r = window.DiscosAndroid.saveText(`discos-copia-${todayISO()}.json`, JSON.stringify(data));
+      toast(r === 'downloads' ? 'Copia guardada en la carpeta Descargas' : r === 'app' ? 'Copia guardada en Android/data/es.discos.app' : 'No se ha podido guardar la copia');
+      return;
+    }
     const blob = new Blob([JSON.stringify(data)], {type: 'application/json'});
     const a = document.createElement('a'); a.href = URL.createObjectURL(blob); a.download = `discos-copia-${todayISO()}.json`;
     document.body.appendChild(a); a.click(); setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
@@ -2285,11 +2290,18 @@ if (S.live && !S.live.backfill && S.live.date !== todayISO()) { S.live = null; s
 render();
 connectDb();
 connectSample();
-if (STANDALONE) {
+window.discosBack = () => {
+  if ($('#sheet .sheet')) { closeSheet(); return true; }
+  if (S.live && !$('#session').classList.contains('hide')) { stopTimer(); closeSessionView(); return true; }
+  if (S.view !== 'home') { S.view = 'home'; render(); window.scrollTo(0, 0); return true; }
+  return false;
+};
+if (STANDALONE && !window.DiscosAndroid) {
   window.addEventListener('beforeinstallprompt', e => { e.preventDefault(); S.installEvt = e; if (S.view === 'settings') render(); });
   window.addEventListener('appinstalled', () => { S.installEvt = null; toast('Discos instalada'); });
-  if ('serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost')) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+// copia sin conexión: también dentro de la app de Android, que abre esta página
+if (STANDALONE && 'serviceWorker' in navigator && (location.protocol === 'https:' || location.hostname === 'localhost') && location.hostname !== 'appassets.androidplatform.net') navigator.serviceWorker.register('sw.js').catch(() => {});
 })();
 </script>
 </body>
